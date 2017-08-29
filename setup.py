@@ -1,16 +1,16 @@
 from setuptools import setup
 
 setup(
-    name="pytest-html",
+    name="pytest-html-profiling",
     use_scm_version=True,
     description="pytest plugin for generating HTML reports",
     long_description=open("README.rst").read(),
     author="Dave Hunt",
     author_email="dhunt@mozilla.com",
-    url="https://github.com/pytest-dev/pytest-html",
-    packages=["pytest_html"],
-    package_data={"pytest_html": ["resources/*"]},
-    entry_points={"pytest11": ["html = pytest_html.plugin"]},
+    url="https://github.com/hyperbrowser/pytest-html-profiling",
+    packages=["pytest_html_profiling"],
+    package_data={"pytest_html_profiling": ["resources/*"]},
+    entry_points={"pytest11": ["html = pytest_html_profiling.plugin"]},
     setup_requires=["setuptools_scm"],
     install_requires=["pytest>=3.0", "pytest-metadata"],
     license="Mozilla Public License 2.0 (MPL 2.0)",

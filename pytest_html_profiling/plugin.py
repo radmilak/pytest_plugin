@@ -483,7 +483,7 @@ class HTMLReport(object):
                 "Report generated on {0} at {1} by ".format(
                     generated.strftime("%d-%b-%Y"), generated.strftime("%H:%M:%S")
                 ),
-                html.a("pytest-html", href=__pypi_url__),
+                html.a("pytest-html-profiling", href=__pypi_url__),
                 " v{0}".format(__version__),
             ),
             onLoad="init()",

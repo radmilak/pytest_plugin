@@ -251,7 +251,7 @@ class TestHTML:
         assert result.ret == 0
 
         content = pkg_resources.resource_string(
-            "pytest_html", os.path.join("resources", "style.css")
+            "pytest_html_profiling", os.path.join("resources", "style.css")
         )
         if PY3:
             content = content.decode("utf-8")
@@ -264,7 +264,7 @@ class TestHTML:
         assert result.ret == 0
 
         content = pkg_resources.resource_string(
-            "pytest_html", os.path.join("resources", "main.js")
+            "pytest_html_profiling", os.path.join("resources", "main.js")
         )
         if PY3:
             content = content.decode("utf-8")
@@ -323,7 +323,7 @@ class TestHTML:
                 outcome = yield
                 report = outcome.get_result()
                 if report.when == 'call':
-                    from pytest_html import extras
+                    from pytest_html_profiling import extras
                     report.extra = [extras.html('<div>{0}</div>')]
         """.format(
                 content
@@ -347,7 +347,7 @@ class TestHTML:
                 outcome = yield
                 report = outcome.get_result()
                 if report.when == 'call':
-                    from pytest_html import extras
+                    from pytest_html_profiling import extras
                     report.extra = [extras.text({0})]
         """.format(
                 content
@@ -370,7 +370,7 @@ class TestHTML:
                 outcome = yield
                 report = outcome.get_result()
                 if report.when == 'call':
-                    from pytest_html import extras
+                    from pytest_html_profiling import extras
                     report.extra = [extras.json({0})]
         """.format(
                 content
@@ -398,7 +398,7 @@ class TestHTML:
                 outcome = yield
                 report = outcome.get_result()
                 if report.when == 'call':
-                    from pytest_html import extras
+                    from pytest_html_profiling import extras
                     report.extra = [extras.url('{0}')]
         """.format(
                 content
@@ -429,7 +429,7 @@ class TestHTML:
                 outcome = yield
                 report = outcome.get_result()
                 if report.when == 'call':
-                    from pytest_html import extras
+                    from pytest_html_profiling import extras
                     report.extra = [extras.{0}('{1}')]
         """.format(
                 extension, content
@@ -459,7 +459,7 @@ class TestHTML:
                 outcome = yield
                 report = outcome.get_result()
                 if report.when == 'call':
-                    from pytest_html import extras
+                    from pytest_html_profiling import extras
                     report.extra = [extras.text({0})]
         """.format(
                 content
@@ -487,7 +487,7 @@ class TestHTML:
                 outcome = yield
                 report = outcome.get_result()
                 if report.when == 'call':
-                    from pytest_html import extras
+                    from pytest_html_profiling import extras
                     report.extra = [extras.{0}('{1}')]
         """.format(
                 extra_type, content
@@ -517,7 +517,7 @@ class TestHTML:
                 outcome = yield
                 report = outcome.get_result()
                 if report.when == 'call':
-                    from pytest_html import extras
+                    from pytest_html_profiling import extras
                     report.extra = [extras.{0}('{1}')]
         """.format(
                 extra_type, content
@@ -551,7 +551,7 @@ class TestHTML:
                 outcome = yield
                 report = outcome.get_result()
                 if report.when == 'call':
-                    from pytest_html import extras
+                    from pytest_html_profiling import extras
                     report.extra = [extras.image('{0}')]
         """.format(
                 content
