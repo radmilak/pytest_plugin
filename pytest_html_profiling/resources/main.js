@@ -78,7 +78,7 @@ function add_collapse() {
 
     // Add show/hide link to each result
     find_all('.col-result').forEach(function(elem) {
-        var collapsed = get_query_parameter('collapsed') || 'Passed';
+        var collapsed = get_query_parameter('collapsed') || 'Error,Failed,Rerun,XFailed,XError,Skipped,Passed';
         var extras = elem.parentNode.nextElementSibling;
         var expandcollapse = document.createElement("span");
         if (collapsed.includes(elem.innerHTML)) {
