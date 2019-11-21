@@ -4,6 +4,9 @@
 
 from __future__ import absolute_import, print_function, unicode_literals
 
+import datetime
+import errno
+
 import pytest
 
 import cProfile
@@ -13,6 +16,10 @@ import gprof2dot
 import os
 import pstats
 import sys
+
+from pytest_profiling import clean_filename
+
+import pytest_html_profiling
 
 try:
     import pygraphviz
@@ -29,6 +36,7 @@ from xml.sax import saxutils
 import pytest_html_profiling.plugin as plugin
 from .plugin import HTMLReport
 
+STATS_FILENAME = 'test.cprof'
 
 def pytest_addhooks(pluginmanager):
     plugin.pytest_addhooks(pluginmanager)
@@ -46,13 +54,70 @@ def pytest_addoption(parser):
                         help="Adds call graph visualizations based on the profiling to the "
                               "HTML file for each test.")
 
+    group.addoption("--html-profile-dir", action="store",
+                          default=os.environ.get('PYTEST_HTML_PROFILE_DIR', 'pytest_profiles'),
+                          dest="profile_dir",
+                          metavar="FILE",
+                          help="Use the specified directory to store the directory containing "
+                               "call graph and statistic files for each individual test. The "
+                               "result HTML file links to the call graph files thus created."
+                               "Default value: profile_dir. Can also be specified in the "
+                               "environment variable PYTEST_HTML_PROFILE_DIR.")
+
 
 def pytest_configure(config):
     profiling = config.getoption('html_profiling')
     if profiling:
-        plugin.HTMLReport = ProfilingHTMLReport
+        config.profiling = profiling
+        #plugin.HTMLReport = ProfilingHTMLReport
+        config.reportCls = ProfilingHTMLReport
 
+    config.profile_dir = config.getoption('profile_dir')
+    config._html = None
     plugin.pytest_configure(config)
+
+# @pytest.mark.hookwrapper
+# def pytest_runtest_setup(item):
+#     yield
+#     t = open('/Users/radmilko/PycharmProjects/pytest-html-profiling/testing/testfile', 'a')
+#     # t.write('--------\n')
+#     # t.write(str(item) + '\n')
+#     # t.write(str(item.name) + '\n')
+#     # t.write(str(item.parent) + '\n')
+#     # #t.write(str(item.args))
+#     # t.write(str(item.config) + '\n')
+#     # t.write(str(item.fspath) + '\n')
+#     # #t.write(item)
+#
+#
+#     test_profile_dir = os.path.join(item.config.profile_dir, os.path.splitext(str(item.fspath))[0])
+#     test_profile_filename = os.path.join(test_profile_dir, STATS_FILENAME)
+#
+#     if not os.path.exists(test_profile_dir):
+#         os.makedirs(test_profile_dir)
+#
+#     t.write('\n')
+#     t.write(test_profile_filename)
+#     t.write('\n')
+#     t.write(item.config.profile_dir)
+#     t.write('\n')
+#     t.write(str(type(item.config.profile_dir)))
+#     t.write('\n')
+#     t.write(str(type(item.name)))
+#     t.write('\n')
+#
+#     cProfile.runctx(str(item.name) + '()', globals(), locals(), filename=test_profile_filename, sort=1)
+#
+#     t.close()
+
+
+
+
+@pytest.mark.hookwrapper
+def pytest_runtest_makereport(item, call):
+    outcome = yield
+    report = outcome.get_result()
+    report.description = str(item.function.__doc__)
 
 
 class ProfilingHTMLReport(HTMLReport):
@@ -109,13 +174,38 @@ class ProfilingHTMLReport(HTMLReport):
     def __init__(self, logfile, config):
         super(ProfilingHTMLReport, self).__init__(logfile, config)
         self._call_graph = config.getoption('html_call_graph')
+        self._profile_dir = config.getoption('profile_dir')
+        self.start_time = datetime.datetime.now()
+        self.html_file = config._html
+        self.profs = []
 
     #
     #  Temporarily copied from nose-html-profiler
     #
-    def prepareTestCase(self, test):
-        """Wrap test case run in :func:`prof.runcall`.
-        """
+
+    @pytest.hookimpl(hookwrapper=True)
+    def pytest_runtest_protocol(self, item, nextitem):
+        prof_filename = os.path.abspath(
+            os.path.join(self._profile_dir, clean_filename(item.name) + ".prof"))
+        try:
+            os.makedirs(os.path.dirname(prof_filename))
+        except OSError:
+            pass
+        prof = cProfile.Profile()
+        prof.enable()
+        yield
+        prof.disable()
+        try:
+            prof.dump_stats(prof_filename)
+        except EnvironmentError as err:
+            if err.errno != errno.ENAMETOOLONG:
+                raise
+
+        self.profs.append(prof_filename)
+
+
+    def run_profiling(self, test):
+
         test_profile_filename = self._get_test_profile_filename(test)
         test_profile_dir = os.path.dirname(test_profile_filename)
 
@@ -129,7 +219,7 @@ class ProfilingHTMLReport(HTMLReport):
         return run_and_profile
 
     def _get_test_profile_dir(self, test):
-        return os.path.join(self._profile_dir, self.startTime.strftime("%Y_%m_%d_%H_%M_%S"),
+        return os.path.join(self._profile_dir, self.start_time.strftime("%Y_%m_%d_%H_%M_%S"),
                             test.id())
 
     def _get_test_profile_filename(self, test):

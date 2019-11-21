@@ -16,6 +16,9 @@ import time
 import bisect
 import warnings
 import re
+import pytest
+
+
 
 try:
     from ansi2html import Ansi2HTMLConverter, style
@@ -77,12 +80,18 @@ def pytest_addoption(parser):
 
 def pytest_configure(config):
     htmlpath = config.getoption("htmlpath")
+
     if htmlpath:
         for csspath in config.getoption("css"):
             open(csspath)
         if not hasattr(config, "slaveinput"):
             # prevent opening htmlpath on slave nodes (xdist)
-            config._html = HTMLReport(htmlpath, config)
+            if config.reportCls:
+                config._html = config.reportCls(htmlpath, config)
+
+            else:
+                config._html = HTMLReport(htmlpath, config)
+
             config.pluginmanager.register(config._html)
 
 
