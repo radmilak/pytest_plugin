@@ -6,6 +6,7 @@ from __future__ import absolute_import, print_function, unicode_literals
 
 import datetime
 import errno
+from collections import defaultdict
 
 import pytest
 
@@ -111,15 +112,6 @@ def pytest_configure(config):
 #     t.close()
 
 
-
-
-@pytest.mark.hookwrapper
-def pytest_runtest_makereport(item, call):
-    outcome = yield
-    report = outcome.get_result()
-    report.description = str(item.function.__doc__)
-
-
 class ProfilingHTMLReport(HTMLReport):
     PROFILE_DIRNAME = 'results_profiles'
     STATS_FILENAME = 'test.cprof'
@@ -177,16 +169,17 @@ class ProfilingHTMLReport(HTMLReport):
         self._profile_dir = config.getoption('profile_dir')
         self.start_time = datetime.datetime.now()
         self.html_file = config._html
-        self.profs = []
+        self.profs = {}
+        self.profs_results = defaultdict(list)
 
     #
     #  Temporarily copied from nose-html-profiler
     #
 
-    @pytest.hookimpl(hookwrapper=True)
+    @pytest.hookimpl(hookwrapper=True, tryfirst=True)
     def pytest_runtest_protocol(self, item, nextitem):
-        prof_filename = os.path.abspath(
-            os.path.join(self._profile_dir, clean_filename(item.name) + ".prof"))
+        print('runtest protocol running for: ' + str(item.name))
+        prof_filename = self._get_test_profile_filename(item)
         try:
             os.makedirs(os.path.dirname(prof_filename))
         except OSError:
@@ -201,8 +194,67 @@ class ProfilingHTMLReport(HTMLReport):
             if err.errno != errno.ENAMETOOLONG:
                 raise
 
-        self.profs.append(prof_filename)
+        self.profs[item.name] = prof_filename
 
+        output_path = prof_filename + '.txt'
+        with open(output_path, 'w') as stream:
+            stats = pstats.Stats(prof, stream=stream)
+            stats.sort_stats(self.CUMULATIVE)
+            stats.print_stats()
+
+        #report = self._get_profile_report(prof, self.CUMULATIVE)
+
+        self.profs_results[item.name].append(output_path)
+        print('profs result saved')
+
+    def pytest_sessionfinish(self, session, exitstatus):  # @UnusedVariable
+        # if self.profs:
+        #     for name, prof in self.profs.iteritems():
+        #         # prof_text = pstats.Stats(prof)
+        #         output_path = prof + '.txt'
+        #         with open(output_path, 'w') as stream:
+        #             stats = pstats.Stats(prof, stream=stream)
+        #             stats.sort_stats(self.CUMULATIVE)
+        #             stats.print_stats()
+        #
+        #         report = self._get_profile_report(prof, self.CUMULATIVE)
+        #
+        #         self.profs_results[name].append(output_path)
+
+        report_content = self._generate_report(session)
+        self._save_report(report_content)
+
+
+            # self.combined = os.path.abspath(os.path.join(self.dir, "combined.prof"))
+            # combined.dump_stats(self.combined)
+            # if self.svg:
+            #     self.svg_name = os.path.abspath(os.path.join(self.dir, "combined.svg"))
+            #     t = pipes.Template()
+            #     t.append("{} -f pstats $IN".format(self.gprof2dot), "f-")
+            #     t.append("dot -Tsvg -o $OUT", "-f")
+            #     t.copy(self.combined, self.svg_name)
+
+    @pytest.hookimpl(hookwrapper=True, trylast=True)
+    def pytest_runtest_makereport(self, item, call):
+        print('makereport running for: ' + str(item.name))
+        #pytest_html_profiling = item.config.pluginmanager.getplugin('html')
+        outcome = yield
+        report = outcome.get_result()
+        extra = getattr(report, 'extra', [])
+        if report.when == 'call':
+
+            #print(self.profs_results)
+            prof_txt_filenames = self.profs_results[item.name]
+            #print(prof_txt_filenames)
+            # always add url to report
+            #extra.append(plugin.extras.url('http://www.example.com/'))
+            for prof_txt_filename in prof_txt_filenames:
+                extra.append(plugin.extras.url('file://' + prof_txt_filename))
+            xfail = hasattr(report, 'wasxfail')
+            if (report.skipped and xfail) or (report.failed and not xfail):
+                # only add additional html on failure
+                extra.append(plugin.extras.html('<div>Additional HTML</div>'))
+            report.extra = extra
 
     def run_profiling(self, test):
 
@@ -222,8 +274,13 @@ class ProfilingHTMLReport(HTMLReport):
         return os.path.join(self._profile_dir, self.start_time.strftime("%Y_%m_%d_%H_%M_%S"),
                             test.id())
 
-    def _get_test_profile_filename(self, test):
-        return os.path.join(self._get_test_profile_dir(test), self.STATS_FILENAME)
+    def _get_test_profile_filename(self, item):
+        #return os.path.join(self._get_test_profile_dir(test), self.STATS_FILENAME)
+
+        return os.path.abspath(os.path.join(self._profile_dir, clean_filename(item.name) + ".prof"))
+
+    def _get_test_profile_txt_filename(self, item):
+        return self._get_test_profile_filename(item) + '.txt'
 
     def _get_test_dot_filename(self, test, prune):
         return os.path.join(self._get_test_profile_dir(test),
@@ -253,13 +310,13 @@ class ProfilingHTMLReport(HTMLReport):
     def _link_to_report_html(self, test, label, title, report):
         return self.LINK_TEMPLATE.format(test.id() + '.' + label, title, report)
 
-    def _get_profile_report(self, test, type):
-        report = capture(self._print_profile_report, test, type)
+    def _get_profile_report(self, item, type):
+        report = capture(self._print_profile_report, item, type)
         report = cgi.escape(report)
         return report
 
-    def _print_profile_report(self, test, type):
-        stats = pstats.Stats(self._get_test_profile_filename(test))
+    def _print_profile_report(self, prof_path, type):
+        stats = pstats.Stats(prof_path)
 
         if stats:
             print(self.PROFILE_HEADER[type])
