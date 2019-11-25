@@ -77,40 +77,6 @@ def pytest_configure(config):
     config._html = None
     plugin.pytest_configure(config)
 
-# @pytest.mark.hookwrapper
-# def pytest_runtest_setup(item):
-#     yield
-#     t = open('/Users/radmilko/PycharmProjects/pytest-html-profiling/testing/testfile', 'a')
-#     # t.write('--------\n')
-#     # t.write(str(item) + '\n')
-#     # t.write(str(item.name) + '\n')
-#     # t.write(str(item.parent) + '\n')
-#     # #t.write(str(item.args))
-#     # t.write(str(item.config) + '\n')
-#     # t.write(str(item.fspath) + '\n')
-#     # #t.write(item)
-#
-#
-#     test_profile_dir = os.path.join(item.config.profile_dir, os.path.splitext(str(item.fspath))[0])
-#     test_profile_filename = os.path.join(test_profile_dir, STATS_FILENAME)
-#
-#     if not os.path.exists(test_profile_dir):
-#         os.makedirs(test_profile_dir)
-#
-#     t.write('\n')
-#     t.write(test_profile_filename)
-#     t.write('\n')
-#     t.write(item.config.profile_dir)
-#     t.write('\n')
-#     t.write(str(type(item.config.profile_dir)))
-#     t.write('\n')
-#     t.write(str(type(item.name)))
-#     t.write('\n')
-#
-#     cProfile.runctx(str(item.name) + '()', globals(), locals(), filename=test_profile_filename, sort=1)
-#
-#     t.close()
-
 
 class ProfilingHTMLReport(HTMLReport):
     PROFILE_DIRNAME = 'results_profiles'
@@ -176,10 +142,10 @@ class ProfilingHTMLReport(HTMLReport):
     #  Temporarily copied from nose-html-profiler
     #
 
-    @pytest.hookimpl(hookwrapper=True, tryfirst=True)
-    def pytest_runtest_protocol(self, item, nextitem):
-        print('runtest protocol running for: ' + str(item.name))
-        prof_filename = self._get_test_profile_filename(item)
+    @pytest.hookimpl(hookwrapper=True)
+    def pytest_runtest_call(self, item):
+        #print('runtest protocol running for: ' + str(item.name))
+        prof_filename = self._get_test_profile_filename(item.name)
         try:
             os.makedirs(os.path.dirname(prof_filename))
         except OSError:
@@ -196,16 +162,17 @@ class ProfilingHTMLReport(HTMLReport):
 
         self.profs[item.name] = prof_filename
 
-        output_path = prof_filename + '.txt'
-        with open(output_path, 'w') as stream:
-            stats = pstats.Stats(prof, stream=stream)
-            stats.sort_stats(self.CUMULATIVE)
-            stats.print_stats()
+        # output_path = prof_filename + '.txt'
+        # with open(output_path, 'w') as stream:
+        #     stats = pstats.Stats(prof, stream=stream)
+        #     stats.sort_stats(self.CUMULATIVE)
+        #     stats.print_stats()
+        #
+        # #report = self._get_profile_report(prof, self.CUMULATIVE)
+        #
+        # self.profs_results[item.name].append(output_path)
+        # print('profs result saved')
 
-        #report = self._get_profile_report(prof, self.CUMULATIVE)
-
-        self.profs_results[item.name].append(output_path)
-        print('profs result saved')
 
     def pytest_sessionfinish(self, session, exitstatus):  # @UnusedVariable
         # if self.profs:
@@ -221,40 +188,105 @@ class ProfilingHTMLReport(HTMLReport):
         #
         #         self.profs_results[name].append(output_path)
 
+
+        if self.profs:
+            for name, path in self.profs.iteritems():
+                self.generateStatsFile(name, path, self.CUMULATIVE)
+                self.generateStatsFile(name, path, self.INTERNAL)
+                self._write_dot_graph(name, path, self.PRUNED_CUMULATIVE)
+                self._render_graph(name, self.PRUNED_CUMULATIVE)
+                self._write_dot_graph(name, path, self.PRUNED_INTERNAL)
+                self._render_graph(name, self.PRUNED_INTERNAL)
+                self._write_dot_graph(name, path, self.NON_PRUNED)
+                self._render_graph(name, self.NON_PRUNED)
+
         report_content = self._generate_report(session)
         self._save_report(report_content)
 
-
-            # self.combined = os.path.abspath(os.path.join(self.dir, "combined.prof"))
-            # combined.dump_stats(self.combined)
-            # if self.svg:
-            #     self.svg_name = os.path.abspath(os.path.join(self.dir, "combined.svg"))
-            #     t = pipes.Template()
-            #     t.append("{} -f pstats $IN".format(self.gprof2dot), "f-")
-            #     t.append("dot -Tsvg -o $OUT", "-f")
-            #     t.copy(self.combined, self.svg_name)
-
-    @pytest.hookimpl(hookwrapper=True, trylast=True)
+    @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_makereport(self, item, call):
-        print('makereport running for: ' + str(item.name))
+        #print('makereport running for: ' + str(item.name))
         #pytest_html_profiling = item.config.pluginmanager.getplugin('html')
         outcome = yield
         report = outcome.get_result()
         extra = getattr(report, 'extra', [])
         if report.when == 'call':
-
-            #print(self.profs_results)
-            prof_txt_filenames = self.profs_results[item.name]
+            prof_filename = self._get_test_profile_filename(item.name)
+            stat_filenames = prof_filename + self.INTERNAL, prof_filename + self.CUMULATIVE
             #print(prof_txt_filenames)
             # always add url to report
             #extra.append(plugin.extras.url('http://www.example.com/'))
-            for prof_txt_filename in prof_txt_filenames:
-                extra.append(plugin.extras.url('file://' + prof_txt_filename))
+            for stat in [self.INTERNAL, self.CUMULATIVE]:
+                stat_filename = prof_filename + stat
+                extra.append(plugin.extras.url('file://' + stat_filename, name=stat))
+            for pruned in [self.PRUNED_INTERNAL, self.PRUNED_CUMULATIVE, self.NON_PRUNED]:
+                graph_filename = self._get_test_graph_filename(item.name, pruned)
+                extra.append(plugin.extras.url('file://' + graph_filename, name=pruned))
+
             xfail = hasattr(report, 'wasxfail')
             if (report.skipped and xfail) or (report.failed and not xfail):
                 # only add additional html on failure
                 extra.append(plugin.extras.html('<div>Additional HTML</div>'))
             report.extra = extra
+
+
+
+    def generateStatsFile(self, name, path, statType):
+        output_path = path + statType
+        with open(output_path, 'w') as stream:
+            stats = pstats.Stats(path, stream=stream)
+            stats.sort_stats(statType)
+            stats.print_stats()
+
+        self.profs_results[name].append(output_path)
+
+
+    def _write_dot_graph(self, name, path, prune=''):
+        parser = gprof2dot.PstatsParser(path)
+        profile = parser.parse()
+
+        funcId = self._find_func_id_for_test_case(profile, name)
+        if funcId:
+            profile.prune_root(funcId)
+
+        if prune == self.PRUNED_CUMULATIVE:
+            profile.prune(0.005, 0.001, None, True)
+        elif prune == self.PRUNED_INTERNAL:
+            profile.prune(0.005, 0.001, None, True)
+        else:
+            profile.prune(0, 0, None, False)
+
+        with open(self._get_test_dot_filename(name, prune), 'wt') as f:
+            dot = gprof2dot.DotWriter(f)
+            dot.graph(profile, self.TEMPERATURE_COLORMAP)
+
+    def _find_func_id_for_test_case(self, profile, testName):
+        #testName = test.id().split('.')[-1]
+        funcIds = [func.id for func in profile.functions.values() if func.name.endswith(testName)]
+
+        if len(funcIds) == 1:
+            return funcIds
+
+
+    def _get_test_profile_filename(self, name):
+        #return os.path.join(self._get_test_profile_dir(test), self.STATS_FILENAME)
+
+        return os.path.abspath(os.path.join(self._profile_dir, clean_filename(name) + ".prof"))
+
+    def _get_test_dot_filename(self, name, prune):
+        return os.path.abspath(os.path.join(self._profile_dir, clean_filename(name) +
+                            self.CALLGRAPH_NAME[prune] + self.DOT_SUFFIX))
+
+    def _render_graph(self, name, prune):
+        graph = pygraphviz.AGraph(self._get_test_dot_filename(name, prune))
+        graph.layout('dot')
+        graph.draw(self._get_test_graph_filename(name, prune))
+
+    def _get_test_graph_filename(self, name, prune):
+        return os.path.abspath(os.path.join(self._profile_dir, clean_filename(name) +
+                            self.CALLGRAPH_NAME[prune] + self.GRAPH_SUFFIX))
+
+    #---------------------------------------------------------------------
 
     def run_profiling(self, test):
 
@@ -274,21 +306,11 @@ class ProfilingHTMLReport(HTMLReport):
         return os.path.join(self._profile_dir, self.start_time.strftime("%Y_%m_%d_%H_%M_%S"),
                             test.id())
 
-    def _get_test_profile_filename(self, item):
-        #return os.path.join(self._get_test_profile_dir(test), self.STATS_FILENAME)
 
-        return os.path.abspath(os.path.join(self._profile_dir, clean_filename(item.name) + ".prof"))
 
-    def _get_test_profile_txt_filename(self, item):
-        return self._get_test_profile_filename(item) + '.txt'
 
-    def _get_test_dot_filename(self, test, prune):
-        return os.path.join(self._get_test_profile_dir(test),
-                            self.CALLGRAPH_NAME[prune] + self.DOT_SUFFIX)
 
-    def _get_test_graph_filename(self, test, prune):
-        return os.path.join(self._get_test_profile_dir(test),
-                            self.CALLGRAPH_NAME[prune] + self.GRAPH_SUFFIX)
+
 
     def _generate_report_test(self, rows, cid, tid, n, t, o, e):
         o = saxutils.escape(o)
@@ -335,37 +357,6 @@ class ProfilingHTMLReport(HTMLReport):
         rel_graph_filename = os.path.relpath(self._get_test_graph_filename(test, prune),
                                              os.path.dirname(self.html_file))
         return self.IMG_TEMPLATE.format(rel_graph_filename)
-
-    def _write_dot_graph(self, test, prune=False):
-        parser = gprof2dot.PstatsParser(self._get_test_profile_filename(test))
-        profile = parser.parse()
-
-        funcId = self._find_func_id_for_test_case(profile, test)
-        if funcId:
-            profile.prune_root(funcId)
-
-        if prune == self.PRUNED_CUMULATIVE:
-            profile.prune(0.005, 0.001, False)
-        elif prune == self.PRUNED_INTERNAL:
-            profile.prune(0.005, 0.001, True)
-        else:
-            profile.prune(0, 0, False)
-
-        with open(self._get_test_dot_filename(test, prune), 'wt') as f:
-            dot = gprof2dot.DotWriter(f)
-            dot.graph(profile, self.TEMPERATURE_COLORMAP)
-
-    def _find_func_id_for_test_case(self, profile, test):
-        testName = test.id().split('.')[-1]
-        funcIds = [func.id for func in profile.functions.values() if func.name.endswith(testName)]
-
-        if len(funcIds) == 1:
-            return funcIds[0]
-
-    def _render_graph(self, test, prune):
-        graph = pygraphviz.AGraph(self._get_test_dot_filename(test, prune))
-        graph.layout('dot')
-        graph.draw(self._get_test_graph_filename(test, prune))
 
     def finalize(self, result):
         if not self.available():
