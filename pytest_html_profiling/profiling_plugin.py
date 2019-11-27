@@ -20,8 +20,6 @@ import sys
 
 from pytest_profiling import clean_filename
 
-import pytest_html_profiling
-
 try:
     import pygraphviz
 except ImportError:
@@ -80,7 +78,6 @@ def pytest_configure(config):
 
 class ProfilingHTMLReport(HTMLReport):
     PROFILE_DIRNAME = 'results_profiles'
-    STATS_FILENAME = 'test.cprof'
     DOT_SUFFIX = '.dot'
     GRAPH_SUFFIX = '.png'
 
@@ -105,18 +102,18 @@ class ProfilingHTMLReport(HTMLReport):
                        NON_PRUNED: 'Call-graph (not pruned, colored by cumulative time)'}
 
     LINK_TEMPLATE = """
-</pre>
-<a class ="popup_link" onfocus="this.blur();" href="javascript:showTestDetail('{0}')">{1}</a>
-<p>
-<div id='{0}' class="popup_window" style="background-color: #D9D9D9; margin-top: 10; margin-bottom: 10">
-    <div style='text-align: right; color:black;cursor:pointer'>
-        <a onfocus='this.blur();' onclick="document.getElementById('{0}').style.display = 'none' " >
-           [x]</a>
-    </div>
-    <pre>{2}</pre>
-</div>
-</p>
-<pre>"""  # divId, linkText, content
+            <a onfocus="this.blur();" href="javascript:toggle_collapsed(\'{0}\')">{1}</a>
+            <p>
+            <div id='{0}' class="popup_window collapsed" style="background-color: #D9D9D9; margin-top: 10; margin-bottom: 10">
+                <div style='text-align: right; color:black;cursor:pointer'>
+                    <a onfocus='this.blur();' onclick="document.getElementById('{0}').style.display = 'none' " >
+                       [x]</a>
+                </div>
+                <pre>{2}</pre>
+            </div>
+            </p>
+            
+            """
 
     IMG_TEMPLATE = """
 <img src="{0}">
@@ -135,12 +132,8 @@ class ProfilingHTMLReport(HTMLReport):
         self._profile_dir = config.getoption('profile_dir')
         self.start_time = datetime.datetime.now()
         self.html_file = config._html
-        self.profs = {}
-        self.profs_results = defaultdict(list)
-
-    #
-    #  Temporarily copied from nose-html-profiler
-    #
+        self.profs_results = defaultdict(dict)
+        self.graph_results = defaultdict(dict)
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_call(self, item):
@@ -160,85 +153,43 @@ class ProfilingHTMLReport(HTMLReport):
             if err.errno != errno.ENAMETOOLONG:
                 raise
 
-        self.profs[item.name] = prof_filename
-
-        # output_path = prof_filename + '.txt'
-        # with open(output_path, 'w') as stream:
-        #     stats = pstats.Stats(prof, stream=stream)
-        #     stats.sort_stats(self.CUMULATIVE)
-        #     stats.print_stats()
-        #
-        # #report = self._get_profile_report(prof, self.CUMULATIVE)
-        #
-        # self.profs_results[item.name].append(output_path)
-        # print('profs result saved')
-
-
-    def pytest_sessionfinish(self, session, exitstatus):  # @UnusedVariable
-        # if self.profs:
-        #     for name, prof in self.profs.iteritems():
-        #         # prof_text = pstats.Stats(prof)
-        #         output_path = prof + '.txt'
-        #         with open(output_path, 'w') as stream:
-        #             stats = pstats.Stats(prof, stream=stream)
-        #             stats.sort_stats(self.CUMULATIVE)
-        #             stats.print_stats()
-        #
-        #         report = self._get_profile_report(prof, self.CUMULATIVE)
-        #
-        #         self.profs_results[name].append(output_path)
-
-
-        if self.profs:
-            for name, path in self.profs.iteritems():
-                self.generateStatsFile(name, path, self.CUMULATIVE)
-                self.generateStatsFile(name, path, self.INTERNAL)
-                self._write_dot_graph(name, path, self.PRUNED_CUMULATIVE)
-                self._render_graph(name, self.PRUNED_CUMULATIVE)
-                self._write_dot_graph(name, path, self.PRUNED_INTERNAL)
-                self._render_graph(name, self.PRUNED_INTERNAL)
-                self._write_dot_graph(name, path, self.NON_PRUNED)
-                self._render_graph(name, self.NON_PRUNED)
-
-        report_content = self._generate_report(session)
-        self._save_report(report_content)
+        self.generate_stats_and_graphs(item.name, prof_filename)
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_makereport(self, item, call):
-        #print('makereport running for: ' + str(item.name))
-        #pytest_html_profiling = item.config.pluginmanager.getplugin('html')
         outcome = yield
         report = outcome.get_result()
         extra = getattr(report, 'extra', [])
         if report.when == 'call':
-            prof_filename = self._get_test_profile_filename(item.name)
-            stat_filenames = prof_filename + self.INTERNAL, prof_filename + self.CUMULATIVE
-            #print(prof_txt_filenames)
-            # always add url to report
-            #extra.append(plugin.extras.url('http://www.example.com/'))
             for stat in [self.INTERNAL, self.CUMULATIVE]:
-                stat_filename = prof_filename + stat
-                extra.append(plugin.extras.url('file://' + stat_filename, name=stat))
-            for pruned in [self.PRUNED_INTERNAL, self.PRUNED_CUMULATIVE, self.NON_PRUNED]:
-                graph_filename = self._get_test_graph_filename(item.name, pruned)
-                extra.append(plugin.extras.url('file://' + graph_filename, name=pruned))
+                prof_result = self.profs_results[item.name][stat]
+                profHtml = self._link_to_report_html(item.name, stat, self.PROFILE_LINK[stat], prof_result)
+                extra.append(plugin.extras.html(profHtml))
 
-            xfail = hasattr(report, 'wasxfail')
-            if (report.skipped and xfail) or (report.failed and not xfail):
-                # only add additional html on failure
-                extra.append(plugin.extras.html('<div>Additional HTML</div>'))
+            for pruned in [self.PRUNED_INTERNAL, self.PRUNED_CUMULATIVE, self.NON_PRUNED]:
+                graph_filename = self.graph_results[item.name][pruned]
+                graph_link = self.IMG_TEMPLATE.format(graph_filename)
+                graphHtml = self._link_to_report_html(item.name, self.CALLGRAPH_NAME[pruned],
+                                          self.CALLGRAPH_TITLE[pruned], graph_link)
+                extra.append(plugin.extras.html(graphHtml))
+
             report.extra = extra
 
+    def generate_stats_file(self, name, path, statType):
+        report = self._get_profile_report(path, statType)
+        self.profs_results[name][statType] = report
+
+    def generate_stats_and_graphs(self, name, path):
+        self.generate_stats_file(name, path, self.CUMULATIVE)
+        self.generate_stats_file(name, path, self.INTERNAL)
+        self.generate_graphs(name, path, self.PRUNED_CUMULATIVE)
+        self.generate_graphs(name, path, self.PRUNED_INTERNAL)
+        self.generate_graphs(name, path, self.NON_PRUNED)
 
 
-    def generateStatsFile(self, name, path, statType):
-        output_path = path + statType
-        with open(output_path, 'w') as stream:
-            stats = pstats.Stats(path, stream=stream)
-            stats.sort_stats(statType)
-            stats.print_stats()
-
-        self.profs_results[name].append(output_path)
+    def generate_graphs(self, name, path, prune):
+        self._write_dot_graph(name, path, prune)
+        self._render_graph(name, prune)
 
 
     def _write_dot_graph(self, name, path, prune=''):
@@ -261,16 +212,12 @@ class ProfilingHTMLReport(HTMLReport):
             dot.graph(profile, self.TEMPERATURE_COLORMAP)
 
     def _find_func_id_for_test_case(self, profile, testName):
-        #testName = test.id().split('.')[-1]
         funcIds = [func.id for func in profile.functions.values() if func.name.endswith(testName)]
 
         if len(funcIds) == 1:
             return funcIds
 
-
     def _get_test_profile_filename(self, name):
-        #return os.path.join(self._get_test_profile_dir(test), self.STATS_FILENAME)
-
         return os.path.abspath(os.path.join(self._profile_dir, clean_filename(name) + ".prof"))
 
     def _get_test_dot_filename(self, name, prune):
@@ -280,11 +227,30 @@ class ProfilingHTMLReport(HTMLReport):
     def _render_graph(self, name, prune):
         graph = pygraphviz.AGraph(self._get_test_dot_filename(name, prune))
         graph.layout('dot')
-        graph.draw(self._get_test_graph_filename(name, prune))
+        graph_path = self._get_test_graph_filename(name, prune)
+        graph.draw(graph_path)
+        self.graph_results[name][prune] = graph_path
 
     def _get_test_graph_filename(self, name, prune):
         return os.path.abspath(os.path.join(self._profile_dir, clean_filename(name) +
                             self.CALLGRAPH_NAME[prune] + self.GRAPH_SUFFIX))
+
+    def _link_to_report_html(self, name, label, title, report):
+        return self.LINK_TEMPLATE.format(name + '.' + label, title, report)
+
+    def _get_profile_report(self, path, type):
+        report = capture(self._print_profile_report, path, type)
+        report = cgi.escape(report)
+        return report
+
+    def _print_profile_report(self, prof_path, type):
+        stats = pstats.Stats(prof_path)
+
+        if stats:
+            print(self.PROFILE_HEADER[type])
+            stats.sort_stats(type)
+            stats.print_stats()
+            print(self.PROFILE_FOOTER)
 
     #---------------------------------------------------------------------
 
@@ -306,12 +272,6 @@ class ProfilingHTMLReport(HTMLReport):
         return os.path.join(self._profile_dir, self.start_time.strftime("%Y_%m_%d_%H_%M_%S"),
                             test.id())
 
-
-
-
-
-
-
     def _generate_report_test(self, rows, cid, tid, n, t, o, e):
         o = saxutils.escape(o)
 
@@ -328,23 +288,6 @@ class ProfilingHTMLReport(HTMLReport):
     def _get_profile_report_html(self, test, type):
         report = self._get_profile_report(test, type)
         return self._link_to_report_html(test, type, self.PROFILE_LINK[type], report)
-
-    def _link_to_report_html(self, test, label, title, report):
-        return self.LINK_TEMPLATE.format(test.id() + '.' + label, title, report)
-
-    def _get_profile_report(self, item, type):
-        report = capture(self._print_profile_report, item, type)
-        report = cgi.escape(report)
-        return report
-
-    def _print_profile_report(self, prof_path, type):
-        stats = pstats.Stats(prof_path)
-
-        if stats:
-            print(self.PROFILE_HEADER[type])
-            stats.sort_stats(type)
-            stats.print_stats()
-            print(self.PROFILE_FOOTER)
 
     def _get_callgraph_report_html(self, test, prune):
         report = self._get_callgraph_report(test, prune)

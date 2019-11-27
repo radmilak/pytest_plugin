@@ -293,10 +293,10 @@ class HTMLReport(object):
                 log.append(raw(content))
                 log.append(html.br())
 
-            if len(log) == 0:
-                log = html.div(class_="empty log")
-                log.append("No log output captured.")
-            additional_html.append(log)
+            if len(log) != 0:
+                # log = html.div(class_="empty log")
+                # log.append("No log output captured.")
+                additional_html.append(log)
 
     def _appendrow(self, outcome, report):
         result = self.TestResult(outcome, report, self.logfile, self.config)

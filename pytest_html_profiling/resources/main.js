@@ -232,3 +232,8 @@ function filter_table(elem) {
     var not_found_message = document.getElementById("not-found-message");
     not_found_message.hidden = !all_rows_hidden;
 }
+
+function toggle_collapsed(id) {
+  var element = document.getElementById(id);
+  element.classList.toggle("collapsed");
+}
