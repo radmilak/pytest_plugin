@@ -8,7 +8,7 @@ import pytest
 
 def pytest_html_results_summary(prefix, summary, postfix):
     """ Called before adding the summary section to the report """
-    summary.extend([html.p("foo: bar ncsklnlsdknslncslk")])
+    pass
 
 
 

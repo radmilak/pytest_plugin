@@ -18,8 +18,6 @@ import os
 import pstats
 import sys
 
-from pytest_profiling import clean_filename
-
 try:
     import pygraphviz
 except ImportError:
@@ -30,12 +28,9 @@ try:
 except ImportError:
     from io import StringIO
 
-from xml.sax import saxutils
-
 import pytest_html_profiling.plugin as plugin
 from .plugin import HTMLReport
 
-STATS_FILENAME = 'test.cprof'
 
 def pytest_addhooks(pluginmanager):
     plugin.pytest_addhooks(pluginmanager)
@@ -45,11 +40,11 @@ def pytest_addoption(parser):
     plugin.pytest_addoption(parser)
 
     group = parser.getgroup('terminal reporting')
-    group.addoption("--html-profiling", action="store_true", default=False,
+    group.addoption("--html-profiling", action="store_true", default=False, dest='html_profiling',
                      help="Adds per-test profiling out put to the report HTML file.")
 
     if pygraphviz:
-        group.addoption("--html-call-graph", action="store_true", default=False,
+        group.addoption("--html-call-graph", action="store_true", default=False, dest='call_graph',
                         help="Adds call graph visualizations based on the profiling to the "
                               "HTML file for each test.")
 
@@ -68,7 +63,6 @@ def pytest_configure(config):
     profiling = config.getoption('html_profiling')
     if profiling:
         config.profiling = profiling
-        #plugin.HTMLReport = ProfilingHTMLReport
         config.reportCls = ProfilingHTMLReport
 
     config.profile_dir = config.getoption('profile_dir')
@@ -77,6 +71,7 @@ def pytest_configure(config):
 
 
 class ProfilingHTMLReport(HTMLReport):
+    STATS_FILENAME = 'test.cprof'
     PROFILE_DIRNAME = 'results_profiles'
     DOT_SUFFIX = '.dot'
     GRAPH_SUFFIX = '.png'
@@ -116,8 +111,8 @@ class ProfilingHTMLReport(HTMLReport):
             """
 
     IMG_TEMPLATE = """
-<img src="{0}">
-"""  # graph_filename
+    <img src="{0}">
+    """
 
     TEMPERATURE_COLORMAP = gprof2dot.Theme(
         mincolor=(2.0 / 3.0, 0.80, 0.25),  # dark blue
@@ -128,69 +123,73 @@ class ProfilingHTMLReport(HTMLReport):
 
     def __init__(self, logfile, config):
         super(ProfilingHTMLReport, self).__init__(logfile, config)
-        self._call_graph = config.getoption('html_call_graph')
+        self.profiling = config.getoption('html_profiling')
+        self._call_graph = config.getoption('call_graph', False)
         self._profile_dir = config.getoption('profile_dir')
+        if not os.path.exists(self._profile_dir):
+            os.makedirs(self._profile_dir)
         self.start_time = datetime.datetime.now()
-        self.html_file = config._html
         self.profs_results = defaultdict(dict)
         self.graph_results = defaultdict(dict)
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_call(self, item):
-        #print('runtest protocol running for: ' + str(item.name))
-        prof_filename = self._get_test_profile_filename(item.name)
-        try:
-            os.makedirs(os.path.dirname(prof_filename))
-        except OSError:
-            pass
-        prof = cProfile.Profile()
-        prof.enable()
-        yield
-        prof.disable()
-        try:
-            prof.dump_stats(prof_filename)
-        except EnvironmentError as err:
-            if err.errno != errno.ENAMETOOLONG:
-                raise
+        if not self.profiling:
+            yield
+        else:
+            prof_filename = self._get_test_profile_filename(item.name)
+            prof_dir = os.path.dirname(prof_filename)
+            if not os.path.exists(prof_dir):
+                os.makedirs(prof_dir)
+            prof = cProfile.Profile()
+            prof.enable()
+            yield
+            prof.disable()
+            try:
+                prof.dump_stats(prof_filename)
+            except EnvironmentError as err:
+                if err.errno != errno.ENAMETOOLONG:
+                    raise
 
-        self.generate_stats_and_graphs(item.name, prof_filename)
+            self._generate_stats_and_graphs(item.name, prof_filename)
 
     @pytest.hookimpl(hookwrapper=True)
     def pytest_runtest_makereport(self, item, call):
         outcome = yield
-        report = outcome.get_result()
-        extra = getattr(report, 'extra', [])
-        if report.when == 'call':
-            for stat in [self.INTERNAL, self.CUMULATIVE]:
-                prof_result = self.profs_results[item.name][stat]
-                profHtml = self._link_to_report_html(item.name, stat, self.PROFILE_LINK[stat], prof_result)
-                extra.append(plugin.extras.html(profHtml))
+        if self.profiling:
+            report = outcome.get_result()
+            extra = getattr(report, 'extra', [])
+            if report.when == 'call':
+                for stat in [self.INTERNAL, self.CUMULATIVE]:
+                    prof_result = self.profs_results[item.name][stat]
+                    profHtml = self._link_to_report_html(item.name, stat, self.PROFILE_LINK[stat], prof_result)
+                    extra.append(plugin.extras.html(profHtml))
 
-            for pruned in [self.PRUNED_INTERNAL, self.PRUNED_CUMULATIVE, self.NON_PRUNED]:
-                graph_filename = self.graph_results[item.name][pruned]
-                graph_link = self.IMG_TEMPLATE.format(graph_filename)
-                graphHtml = self._link_to_report_html(item.name, self.CALLGRAPH_NAME[pruned],
-                                          self.CALLGRAPH_TITLE[pruned], graph_link)
-                extra.append(plugin.extras.html(graphHtml))
+                if self._call_graph:
+                    for pruned in [self.PRUNED_INTERNAL, self.PRUNED_CUMULATIVE, self.NON_PRUNED]:
+                        graph_filename = self.graph_results[item.name][pruned]
+                        graph_link = self.IMG_TEMPLATE.format(graph_filename)
+                        graphHtml = self._link_to_report_html(item.name, self.CALLGRAPH_NAME[pruned],
+                                                  self.CALLGRAPH_TITLE[pruned], graph_link)
+                        extra.append(plugin.extras.html(graphHtml))
 
-            report.extra = extra
+                report.extra = extra
 
-    def generate_stats_file(self, name, path, statType):
+    def _generate_stats_file(self, name, path, statType):
         report = self._get_profile_report(path, statType)
         self.profs_results[name][statType] = report
 
-    def generate_stats_and_graphs(self, name, path):
-        self.generate_stats_file(name, path, self.CUMULATIVE)
-        self.generate_stats_file(name, path, self.INTERNAL)
-        self.generate_graphs(name, path, self.PRUNED_CUMULATIVE)
-        self.generate_graphs(name, path, self.PRUNED_INTERNAL)
-        self.generate_graphs(name, path, self.NON_PRUNED)
+    def _generate_stats_and_graphs(self, name, path):
+        self._generate_stats_file(name, path, self.CUMULATIVE)
+        self._generate_stats_file(name, path, self.INTERNAL)
+        if self._call_graph:
+            self._generate_graphs(name, path, self.PRUNED_CUMULATIVE)
+            self._generate_graphs(name, path, self.PRUNED_INTERNAL)
+            self._generate_graphs(name, path, self.NON_PRUNED)
 
-
-    def generate_graphs(self, name, path, prune):
+    def _generate_graphs(self, name, path, prune):
         self._write_dot_graph(name, path, prune)
         self._render_graph(name, prune)
-
 
     def _write_dot_graph(self, name, path, prune=''):
         parser = gprof2dot.PstatsParser(path)
@@ -217,11 +216,14 @@ class ProfilingHTMLReport(HTMLReport):
         if len(funcIds) == 1:
             return funcIds
 
+    def _get_test_profile_dir(self, name):
+        return os.path.join(self._profile_dir, self.start_time.strftime("%Y_%m_%d_%H_%M_%S"), name)
+
     def _get_test_profile_filename(self, name):
-        return os.path.abspath(os.path.join(self._profile_dir, clean_filename(name) + ".prof"))
+        return os.path.abspath(os.path.join(self._get_test_profile_dir(name), self.STATS_FILENAME))
 
     def _get_test_dot_filename(self, name, prune):
-        return os.path.abspath(os.path.join(self._profile_dir, clean_filename(name) +
+        return os.path.abspath(os.path.join(self._get_test_profile_dir(name),
                             self.CALLGRAPH_NAME[prune] + self.DOT_SUFFIX))
 
     def _render_graph(self, name, prune):
@@ -232,7 +234,7 @@ class ProfilingHTMLReport(HTMLReport):
         self.graph_results[name][prune] = graph_path
 
     def _get_test_graph_filename(self, name, prune):
-        return os.path.abspath(os.path.join(self._profile_dir, clean_filename(name) +
+        return os.path.abspath(os.path.join(self._get_test_profile_dir(name),
                             self.CALLGRAPH_NAME[prune] + self.GRAPH_SUFFIX))
 
     def _link_to_report_html(self, name, label, title, report):
@@ -251,59 +253,6 @@ class ProfilingHTMLReport(HTMLReport):
             stats.sort_stats(type)
             stats.print_stats()
             print(self.PROFILE_FOOTER)
-
-    #---------------------------------------------------------------------
-
-    def run_profiling(self, test):
-
-        test_profile_filename = self._get_test_profile_filename(test)
-        test_profile_dir = os.path.dirname(test_profile_filename)
-
-        if not os.path.exists(test_profile_dir):
-            os.makedirs(test_profile_dir)
-
-        def run_and_profile(result, test=test):
-            cProfile.runctx("test.test(result)", globals(), locals(),
-                            filename=test_profile_filename, sort=1)
-
-        return run_and_profile
-
-    def _get_test_profile_dir(self, test):
-        return os.path.join(self._profile_dir, self.start_time.strftime("%Y_%m_%d_%H_%M_%S"),
-                            test.id())
-
-    def _generate_report_test(self, rows, cid, tid, n, t, o, e):
-        o = saxutils.escape(o)
-
-        o += self._get_profile_report_html(t, self.CUMULATIVE)
-        o += self._get_profile_report_html(t, self.INTERNAL)
-
-        if self._call_graph:
-            o += self._get_callgraph_report_html(t, self.PRUNED_CUMULATIVE)
-            o += self._get_callgraph_report_html(t, self.PRUNED_INTERNAL)
-            o += self._get_callgraph_report_html(t, self.NON_PRUNED)
-
-        super(ProfilingHTMLReport, self)._generate_report_test(rows, cid, tid, n, t, o, e)
-
-    def _get_profile_report_html(self, test, type):
-        report = self._get_profile_report(test, type)
-        return self._link_to_report_html(test, type, self.PROFILE_LINK[type], report)
-
-    def _get_callgraph_report_html(self, test, prune):
-        report = self._get_callgraph_report(test, prune)
-        return self._link_to_report_html(test, self.CALLGRAPH_NAME[prune],
-                                         self.CALLGRAPH_TITLE[prune], report)
-
-    def _get_callgraph_report(self, test, prune):
-        self._write_dot_graph(test, prune)
-        self._render_graph(test, prune)
-        rel_graph_filename = os.path.relpath(self._get_test_graph_filename(test, prune),
-                                             os.path.dirname(self.html_file))
-        return self.IMG_TEMPLATE.format(rel_graph_filename)
-
-    def finalize(self, result):
-        if not self.available():
-            return
 
 
 def capture(func, *args, **kwArgs):
