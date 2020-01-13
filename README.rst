@@ -1,8 +1,8 @@
-pytest-html
-===========
+pytest-html-profiling
+=====================
 
-pytest-html is a plugin for `pytest <http://pytest.org>`_ that generates a
-HTML report for the test results.
+pytest-html-profiling is a plugin for `pytest <http://pytest.org>`_  based on the pytest-html plugin that generates a
+HTML report for the test results along with profiling results and call graphs.
 
 .. image:: https://img.shields.io/badge/license-MPL%202.0-blue.svg
    :target: https://github.com/pytest-dev/pytest-html/blob/master/LICENSE
@@ -26,24 +26,24 @@ HTML report for the test results.
 Requirements
 ------------
 
-You will need the following prerequisites in order to use pytest-html:
+You will need the following prerequisites in order to use pytest-html-profiling:
 
-- Python 2.7, 3.6, PyPy, or PyPy3
+- Python 2.7, 3.8
 
 Installation
 ------------
 
-To install pytest-html:
+To install pytest-html-profiling:
 
 .. code-block:: bash
 
-  $ pip install pytest-html
+  $ pip install pytest-html-profiling
 
 Then run your tests with:
 
 .. code-block:: bash
 
-  $ pytest --html=report.html
+  $ pytest --html=report.html --html-profiling --html-call-graph
 
 ANSI codes
 ----------
@@ -53,25 +53,6 @@ Note that ANSI code support depends on the
 of a less permissive license, this package is not included as a dependency. If
 you have this package installed, then ANSI codes will be converted to HTML in
 your report.
-
-Creating a self-contained report
---------------------------------
-
-In order to respect the `Content Security Policy (CSP)
-<https://developer.mozilla.org/docs/Web/Security/CSP>`_,
-several assets such as CSS and images are stored separately by default.
-You can alternatively create a self-contained report, which can be more
-convenient when sharing your results. This can be done in the following way:
-
-.. code-block:: bash
-
-   $ pytest --html=report.html --self-contained-html
-
-Images added as files or links are going to be linked as external resources,
-meaning that the standalone report HTML-file may not display these images
-as expected.
-
-The plugin will issue a warning when adding files or links to the standalone report.
 
 Enhancing reports
 -----------------

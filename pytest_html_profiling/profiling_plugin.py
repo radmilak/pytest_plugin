@@ -167,8 +167,9 @@ class ProfilingHTMLReport(HTMLReport):
 
                 if self._call_graph:
                     for pruned in [self.PRUNED_INTERNAL, self.PRUNED_CUMULATIVE, self.NON_PRUNED]:
-                        graph_filename = self.graph_results[item.name][pruned]
-                        graph_link = self.IMG_TEMPLATE.format(graph_filename)
+                        graph_abspath = self.graph_results[item.name][pruned]
+                        graph_report_relpath = os.path.relpath(graph_abspath, os.path.dirname(self.logfile))
+                        graph_link = self.IMG_TEMPLATE.format(graph_report_relpath)
                         graphHtml = self._link_to_report_html(item.name, self.CALLGRAPH_NAME[pruned],
                                                   self.CALLGRAPH_TITLE[pruned], graph_link)
                         extra.append(plugin.extras.html(graphHtml))
