@@ -62,8 +62,9 @@ def pytest_addoption(parser):
 def pytest_configure(config):
     profiling = config.getoption('html_profiling')
     if profiling:
-        config.profiling = profiling
         config.reportCls = ProfilingHTMLReport
+    else:
+        config.reportCls = HTMLReport
 
     config.profile_dir = config.getoption('profile_dir')
     config._html = None
