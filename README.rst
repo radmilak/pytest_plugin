@@ -222,8 +222,14 @@ This behavior can be customized with a query parameter: :code:`?collapsed=Passed
 
 Screenshots
 -----------
+Call graph
 
 .. image:: https://raw.githubusercontent.com/hyperbrowser/pytest-html-profiling/pytest-profiling/screenshots/call_graph.png
+
+
+Profiling report
+
+.. image:: https://raw.githubusercontent.com/hyperbrowser/pytest-html-profiling/pytest-profiling/screenshots/profiling.png
 
 Contributing
 ------------
