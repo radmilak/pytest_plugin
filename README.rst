@@ -28,7 +28,7 @@ Requirements
 
 You will need the following prerequisites in order to use pytest-html-profiling:
 
-- Python 2.7, 3.8
+- Python 2.7, pytest-metadata, pygraphviz, gprof2dot
 
 Installation
 ------------
@@ -116,10 +116,6 @@ Image       ``extra.image('http://some_image.png')``
 
 **Note**: When adding an image from file, the path can be either absolute
 or relative.
-
-**Note**: When using ``--self-contained-html``, images added as files or links
-may not work as expected, see section `Creating a self-contained report`_ for
-more info.
 
 There are also convenient types for several image formats:
 

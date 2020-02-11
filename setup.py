@@ -2,12 +2,12 @@ from setuptools import setup
 
 setup(
     name="pytest-html-profiling",
-    use_scm_version=True,
+    version="1.0.0",
     description="Pytest plugin for generating HTML reports with per-test profiling and "
                 "optionally call graph visualizations. Based on pytest-html by Dave Hunt.",
     long_description=open("README.rst").read(),
     author="Radmila Kompova and Sveinung Gundersen",
-    author_email="sveinugu@gmail.com",
+    author_email="radmilko@ifi.uio.no, sveinugu@gmail.com",
     url="https://github.com/hyperbrowser/pytest-html-profiling",
     packages=["pytest_html_profiling"],
     package_data={"pytest_html_profiling": ["resources/*"]},
@@ -28,8 +28,6 @@ setup(
         "Topic :: Software Development :: Testing",
         "Topic :: Utilities",
         "Programming Language :: Python",
-        "Programming Language :: Python :: 2.7",
-        "Programming Language :: Python :: 3.6",
-        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 2.7"
     ],
 )

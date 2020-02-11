@@ -4,24 +4,18 @@
 
 from __future__ import absolute_import, print_function, unicode_literals
 
-import datetime
-import errno
-from collections import defaultdict
-
-import pytest
-
 import cProfile
 import cgi
-
-import gprof2dot
+import datetime
+import errno
 import os
 import pstats
 import sys
+from collections import defaultdict
 
-try:
-    import pygraphviz
-except ImportError:
-    pygraphviz = None
+import gprof2dot
+import pygraphviz
+import pytest
 
 try:
     from StringIO import StringIO
@@ -43,10 +37,10 @@ def pytest_addoption(parser):
     group.addoption("--html-profiling", action="store_true", default=False, dest='html_profiling',
                      help="Adds per-test profiling out put to the report HTML file.")
 
-    if pygraphviz:
-        group.addoption("--html-call-graph", action="store_true", default=False, dest='call_graph',
-                        help="Adds call graph visualizations based on the profiling to the "
-                              "HTML file for each test.")
+
+    group.addoption("--html-call-graph", action="store_true", default=False, dest='call_graph',
+                    help="Adds call graph visualizations based on the profiling to the "
+                          "HTML file for each test.")
 
     group.addoption("--html-profile-dir", action="store",
                           default=os.environ.get('PYTEST_HTML_PROFILE_DIR', 'pytest_profiles'),
