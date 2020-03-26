@@ -1,0 +1,72 @@
+body {
+	color: #000;
+}
+
+a {
+	color: #000;
+}
+
+/******************************
+ * TEST RESULT COLORS
+ ******************************/
+span.passed {
+	color: #6c6;
+}
+
+span.skipped, span.xfailed, span.rerun {
+	color: #D88E5A;
+}
+
+span.error, span.failed, span.xpassed {
+	color: #D8655A;
+}
+
+tbody.passed {
+	background-color: #6c6;
+}
+
+tbody.skipped, tbody.xfailed, tbody.rerun {
+	background-color: #D88E5A;
+}
+
+tbody.error, tbody.failed, tbody.xpassed {
+	background-color: #D8655A;
+}
+
+.passed .col-result, .skipped .col-result, .xfailed .col-result, .rerun .col-result,
+.error .col-result, .failed .col-result, .xpassed .col-result   {
+	color: black;
+}
+
+td.extra {
+	background-color: white;
+}
+
+/******************************
+ * RESULTS TABLE
+ *
+ * 1. Table Layout
+ * 2. Extra
+ * 3. Sorting items
+ *
+ ******************************/
+/*------------------
+ * 1. Table Layout
+ *------------------*/
+
+#results-table {
+	color: #000;
+}
+
+/*------------------
+ * 2. Extra
+ *------------------*/
+.log {
+	font-family: Courier, "Courier New", monospace;
+}
+.expander::after {
+	color: #444;
+}
+.collapser::after {
+	color: #444;
+}
