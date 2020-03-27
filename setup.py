@@ -13,7 +13,7 @@ setup(
     package_data={"pytest_html_profiling": ["resources/*"]},
     entry_points={"pytest11": ["html = pytest_html_profiling.profiling_plugin"]},
     setup_requires=["setuptools_scm"],
-    install_requires=["pytest>=3.0", "pytest-metadata", 'pygraphviz', 'gprof2dot'],
+    install_requires=["pytest>=3.0", "pytest-metadata", 'gprof2dot'],
     license="Mozilla Public License 2.0 (MPL 2.0)",
     keywords="py.test pytest html report",
     classifiers=[
